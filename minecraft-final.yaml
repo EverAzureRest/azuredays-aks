@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azurefile
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: azurefile
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: minecraft
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: minecraft
+    spec:
+      containers:
+      - name: minecraft
+        image: <acr Name>.azurecr.io/minecraft-server:latest
+        volumeMounts:
+        - mountPath: "/data"
+          name: volume
+        ports:
+        - containerPort: 25565
+        - containerPort: 25575
+        env:
+        - name: EULA
+          value: "TRUE"
+      volumes:
+      - name: volume
+        persistentVolumeClaim:
+          claimName: azurefile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft
+spec:
+  type: LoadBalancer
+  ports:
+  - name: minecraft
+    port: 25565
+    targetPort: 25565
+    protocol: TCP
+  - name: console
+    port: 25575
+    targetPort: 25575
+    protocol: TCP
+  selector:
+    app: minecraft
