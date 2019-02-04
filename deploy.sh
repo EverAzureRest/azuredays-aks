@@ -1,11 +1,11 @@
 #!/bin/bash
 
-export SUBSCRIPTION_NAME=subname
-export AKS_SERVICE_GROUP=aksminecraft-server
-export AKS_SERVICE_NAME=aksminecraft-aks
+export SUBSCRIPTION_NAME=mysubname
+export AKS_SERVICE_GROUP=aksminecraft-group
+export AKS_SERVICE_NAME=aksminecraft-service
 export ACR_NAME=myacrname
 export LOCATION=westus2
-export STORAGE_ACCOUNT_NAME=mystorageaccount
+export STORAGE_ACCOUNT_NAME=mystorageacct
 #export VNET_NAME=
 #export VNET_RESOURCE_GROUP=
 #export SUBNET_NAME=
@@ -19,13 +19,18 @@ SESSION_SUB=$(az account show --query "name" -o tsv)
 if [ $SESSION_SUB != $SUBSCRIPTION_NAME ]; then
     az account set -s $SUBSCRIPTION_NAME
 elif [ ! $SESSION_SUB ]; then
-    echo "Please login using 'az login'"
+    echo "Please login using 'az login' or make sure your subscription name is correct"
     exit 1
 fi
 
 #create resource group for AKS service
 
 az group create -n $AKS_SERVICE_GROUP -l $LOCATION
+
+#Clearing old SP Data if exists
+if [ $(ls -f ~/.azure/aksServicePrincipal) ]; then
+    rm ~/.azure/aksServicePrincipal
+fi
 
 #create aks cluster resource
 
@@ -38,17 +43,18 @@ az aks create -n $AKS_SERVICE_NAME -g $AKS_SERVICE_GROUP \
 
 #check for unique name for our registry and
 if [ $(az acr check-name -n $ACR_NAME --query "nameAvailable") = false ]; then
-    RANDO=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4 ; echo '')
+    RANDO=$(head /dev/urandom | tr -dc a-z0-9 | head -c 4 ; echo '')
     ACR_NAME=${ACR_NAME}${RANDO}
 fi
 
 #create the registry
-az acr create -n $ACR_NAME -g $AKS_SERVICE_GROUP \
-#--sku Standard|Premium
+az acr create -n $ACR_NAME -g $AKS_SERVICE_GROUP --sku Standard
 
+#download the AKS Kubectl ans SP credentials locally
+az aks get-credentials -n $AKS_SERVICE_NAME -g $AKS_SERVICE_GROUP
 
 if [ ! $SERVICE_PRINCIPAL_ID ];then
-    $SERVICE_PRINCIPAL_ID=`cat ~/.azure/aksServicePrincipal.json | jq '.[].service_principal' | tr -d '"'`
+    SERVICE_PRINCIPAL_ID=`cat ~/.azure/aksServicePrincipal.json | jq '.[].service_principal' | tr -d '"'`
 fi
 
 #Get our registry's resourceid
@@ -75,15 +81,17 @@ docker push $ACR_NAME.azurecr.io/minecraft-server:latest
 
 MANAGED_GROUP=MC_${AKS_SERVICE_GROUP}_${AKS_SERVICE_NAME}_${LOCATION}
 
-if [ $(az storage account check-name -n $STORAGE_ACCOUNT_NAME --query "nameavailable") = false ]; then
-    RANDO=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4 ; echo '')
+if [ $(az storage account check-name -n $STORAGE_ACCOUNT_NAME --query "nameAvailable") = false ]; then
+    RANDO=$(head /dev/urandom | tr -dc a-z0-9 | head -c 4 ; echo '')
     STORAGE_ACCOUNT_NAME=${STORAGE_ACCOUNT_NAME}${RANDO}
 fi
 
 az storage account create -n $STORAGE_ACCOUNT_NAME -g $MANAGED_GROUP
 
-echo "Deployment of Azure Resources complete.  Please edit minecraft-final.yaml with the ACR Name ${ACRNAME} and \
-storage-class.yaml with the Storage Account Name ${STORAGE_ACCOUNT_NAME}"
+
+echo "Deployment of Azure Resources complete.  Please edit minecraft-final.yaml with the ACR Name ${ACR_NAME} and \
+storage-class.yaml with the Storage Account Name ${STORAGE_ACCOUNT_NAME}.  Use kubectl apply -f path/to/yaml.yaml \
+to deploy to Kubernetes"
 
 #Get Public IP Address after applying Kubernetes Config \
 # az network public-ip list -g $MANAGED_GROUP --query "[].ipAddress" -o tsv \
