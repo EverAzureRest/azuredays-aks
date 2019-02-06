@@ -1,9 +1,9 @@
 #!/bin/bash
 
-export SUBSCRIPTION_NAME=mysubname
+export SUBSCRIPTION_ID=mysubscriptionid
 export AKS_SERVICE_GROUP=aksminecraft-group
 export AKS_SERVICE_NAME=aksminecraft-service
-export ACR_NAME=myacrname
+export ACR_NAME=myacr
 export LOCATION=westus2
 export STORAGE_ACCOUNT_NAME=mystorageacct
 #export VNET_NAME=
@@ -14,12 +14,12 @@ export STORAGE_ACCOUNT_NAME=mystorageacct
 
 #Run az login if not already logged into a valid Azure subscription
 
-SESSION_SUB=$(az account show --query "name" -o tsv)
+SESSION_SUB=$(az account show --query "id" -o tsv)
 
-if [ $SESSION_SUB != $SUBSCRIPTION_NAME ]; then
-    az account set -s $SUBSCRIPTION_NAME
+if [ $SESSION_SUB != $SUBSCRIPTION_ID ]; then
+    az account set -s $SUBSCRIPTION_ID
 elif [ ! $SESSION_SUB ]; then
-    echo "Please login using 'az login' or make sure your subscription name is correct"
+    echo "Please login using 'az login' or make sure your subscription id is correct"
     exit 1
 fi
 
@@ -53,7 +53,7 @@ az acr create -n $ACR_NAME -g $AKS_SERVICE_GROUP --sku Standard
 #download the AKS Kubectl ans SP credentials locally
 az aks get-credentials -n $AKS_SERVICE_NAME -g $AKS_SERVICE_GROUP
 
-if [ ! $SERVICE_PRINCIPAL_ID ];then
+if [ ! $SERVICE_PRINCIPAL_ID ]; then
     SERVICE_PRINCIPAL_ID=`cat ~/.azure/aksServicePrincipal.json | jq '.[].service_principal' | tr -d '"'`
 fi
 
